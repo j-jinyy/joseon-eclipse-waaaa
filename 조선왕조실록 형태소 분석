@@ -1,0 +1,81 @@
+# KoNLPy 및 필요한 라이브러리 설치 (코랩에서 실행)
+!pip install konlpy pandas
+
+import pandas as pd
+from konlpy.tag import Kkma
+import os
+import re # 문자열 정리용
+
+def analyze_by_king_and_save(input_filename='식이전한글.txt',
+                             output_filename='왕별_형태소_분석결과2.csv',
+                             encoding='cp949'):
+    """
+    탭 구분 파일(TSV)을 읽어 '왕'별 '기사제목'을 형태소 분석하고
+    '왕, 형태소, 품사' 형식으로 CSV 파일을 저장합니다.
+    """
+    kkma = Kkma()
+    final_results = []
+
+    # 1. Pandas로 TXT (TSV) 파일 읽기
+    try:
+        # cp949 인코딩으로 탭 구분 파일을 읽습니다.
+        df = pd.read_csv(input_filename, sep='\t', encoding=encoding, header=0, engine='python')
+        print(f"📄 '{input_filename}' 파일을 성공적으로 읽었습니다. (인코딩: {encoding})")
+
+    except FileNotFoundError:
+        print(f"❌ 오류: '{input_filename}' 파일을 찾을 수 없습니다.")
+        return
+    except UnicodeDecodeError:
+        print(f"❌ 오류: '{encoding}' 인코딩으로 파일을 디코딩할 수 없습니다. 'euc-kr' 또는 'utf-8'을 시도해보세요.")
+        return
+    except Exception as e:
+        print(f"❌ 오류: 파일 읽기 중 예상치 못한 오류가 발생했습니다: {e}")
+        return
+
+    # 2. 필요한 컬럼 추출 및 오류 방지 로직
+    # 컬럼명 정규화: 공백이나 특수문자 제거
+    df.columns = df.columns.str.strip()
+
+    if '왕' not in df.columns or '기사제목' not in df.columns:
+        print("❌ 오류: 파일에 '왕' 또는 '기사제목' 컬럼이 존재하지 않습니다. 컬럼명을 확인해주세요.")
+        print(f"현재 컬럼명: {df.columns.tolist()}")
+        return
+
+    # 3. 왕별 기사제목 형태소 분석
+
+    # NaN 값은 빈 문자열로 처리
+    df = df.fillna('')
+
+    for index, row in df.iterrows():
+        king = row['왕'] # '왕' 컬럼의 값
+        title = row['기사제목'] # '기사제목' 컬럼의 텍스트
+
+        # 텍스트가 비어있지 않은 경우에만 분석 진행
+        if title.strip():
+            # 형태소 분석 실행
+            analyzed_data = kkma.pos(title)
+
+            # 형태소 분석 결과를 최종 리스트에 추가
+            for morpheme, pos_tag in analyzed_data:
+                final_results.append({
+                    '왕': king,
+                    '형태소': morpheme,
+                    '품사': pos_tag
+                })
+
+    # 4. 결과 DataFrame 생성 및 CSV 저장
+    if not final_results:
+        print("⚠️ 분석할 유효한 텍스트를 찾지 못했습니다. 형태소 분석을 진행하지 않습니다.")
+        return
+
+    df_final = pd.DataFrame(final_results)
+
+    # CSV 파일 저장은 표준인 'utf-8'로 진행합니다.
+    df_final.to_csv(output_filename, index=False, encoding='utf-8')
+
+    print(f"✅ 총 {len(df_final)}개의 형태소 분석 결과가 '{output_filename}' 파일로 저장되었습니다.")
+    print("--- 저장된 CSV 파일 미리보기 (상위 5개) ---")
+    print(df_final.head())
+
+# --- 함수 실행 ---
+analyze_by_king_and_save(input_filename='식이전한글.txt')
